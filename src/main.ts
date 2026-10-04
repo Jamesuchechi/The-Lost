@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SIMULATION_STEP, PLAYER_CONFIG } from './config/constants';
+import { SIMULATION_STEP, PLAYER_CONFIG, TILE_SIZE } from './config/constants';
 import { PALETTE } from './config/palette';
 import { level1 } from './config/levels/level1';
 import { generateLevel, type LevelData } from './world/WorldGenerator';
@@ -14,7 +14,13 @@ import { StaminaSystem } from './systems/StaminaSystem';
 import { VisionSystem } from './systems/VisionSystem';
 import { FogRenderer } from './systems/FogRenderer';
 import { NoiseSystem } from './systems/NoiseSystem';
+import { ScentTrail } from './systems/ScentTrail';
+import { PerceptionSystem } from './systems/PerceptionSystem';
+import { Pathfinding } from './world/Pathfinding';
+import { Wolf } from './entities/enemies/Wolf';
+import { SensoryDebugVisualizer } from './ui/SensoryDebugVisualizer';
 import { Hud } from './ui/Hud';
+import { Rng } from './core/rng';
 
 export class App {
   private container: HTMLElement;
@@ -32,16 +38,22 @@ export class App {
   private levelData: LevelData;
   private chunkManager: ChunkManager;
   private player: Player;
+  private wolves: Wolf[] = [];
   private inputController: InputController;
   private cameraController: CameraController;
+  private pathfinding: Pathfinding;
   private staminaSystem: StaminaSystem;
   private visionSystem: VisionSystem;
   private fogRenderer: FogRenderer;
   private noiseSystem: NoiseSystem;
+  private scentTrail: ScentTrail;
+  private perceptionSystem: PerceptionSystem;
+  private sensoryDebugVisualizer: SensoryDebugVisualizer;
   private hud: Hud;
   private debugOverlay: DebugOverlay;
 
   private playerHealth = PLAYER_CONFIG.healthMax;
+  private isDebug = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -49,11 +61,12 @@ export class App {
     // 1. URL Parameters (?seed=xyz, ?debug=1)
     const urlParams = new URLSearchParams(window.location.search);
     const seed = urlParams.get('seed') || 'whispering-woods-alpha';
-    const isDebug = urlParams.get('debug') === '1';
+    this.isDebug = urlParams.get('debug') === '1';
 
     // 2. Core Event Bus & Generation
     this.eventBus = new EventBus<GameEvents>();
     this.levelData = generateLevel(level1, seed);
+    this.pathfinding = new Pathfinding(this.levelData.grid);
 
     // 3. Three.js Scene Setup
     this.scene = new THREE.Scene();
@@ -112,8 +125,20 @@ export class App {
     this.scene.add(this.fogRenderer.mesh);
 
     this.noiseSystem = new NoiseSystem(this.eventBus, this.scene);
+    this.scentTrail = new ScentTrail();
+    this.perceptionSystem = new PerceptionSystem(this.levelData.grid, this.scentTrail);
+
+    // Forward noise events from EventBus to PerceptionSystem
+    this.eventBus.on('noise', (noise) => {
+      this.perceptionSystem.registerNoise(noise);
+    });
+
+    // 8. Spawn Wolves across Level 1
+    this.spawnWolves(seed);
+
+    this.sensoryDebugVisualizer = new SensoryDebugVisualizer(this.scene, this.isDebug);
     this.hud = new Hud();
-    this.debugOverlay = new DebugOverlay(isDebug);
+    this.debugOverlay = new DebugOverlay(this.isDebug);
 
     // Initial chunk load around spawn
     this.chunkManager.update(this.player.position.x, this.player.position.z);
@@ -123,12 +148,41 @@ export class App {
       this.visionSystem.currentRadius
     );
 
-    // 8. Event Listeners
+    // 9. Event Listeners
     window.addEventListener('resize', this.onResize);
 
-    // 9. Start Loop
+    // 10. Start Loop
     this.lastTime = performance.now();
     requestAnimationFrame(this.loop);
+  }
+
+  private spawnWolves(seed: string): void {
+    const aiRng = new Rng(seed, 'ai');
+    const wolfCount = level1.enemies.find((e) => e.type === 'wolf')?.count ?? 8;
+
+    for (let i = 0; i < wolfCount; i++) {
+      let placed = false;
+      let attempts = 0;
+      while (!placed && attempts < 150) {
+        attempts++;
+        const tx = aiRng.int(12, this.levelData.width - 13);
+        const ty = aiRng.int(12, this.levelData.height - 13);
+        const wx = (tx + 0.5) * TILE_SIZE;
+        const wz = (ty + 0.5) * TILE_SIZE;
+
+        // Ensure not right on top of player spawn
+        if (Math.hypot(wx - this.player.position.x, wz - this.player.position.z) < 350) {
+          continue;
+        }
+
+        if (!this.levelData.grid.isBlocked(tx, ty)) {
+          const wolf = new Wolf(`wolf_${i}`, wx, wz, this.pathfinding);
+          this.wolves.push(wolf);
+          this.scene.add(wolf.mesh);
+          placed = true;
+        }
+      }
+    }
   }
 
   private onResize = (): void => {
@@ -148,7 +202,9 @@ export class App {
 
     const input = this.inputController.update();
     if (input.toggleDebug) {
+      this.isDebug = !this.isDebug;
       this.debugOverlay.toggle();
+      this.sensoryDebugVisualizer.setVisible(this.isDebug);
     }
 
     // Fixed timestep simulation (60 Hz)
@@ -163,6 +219,8 @@ export class App {
   };
 
   private simulate(dt: number, input: ReturnType<InputController['update']>): void {
+    const playerPos2D = { x: this.player.position.x, y: this.player.position.z };
+
     // 1. Update Player & Stamina
     this.player.update(dt, input, this.levelData.grid, this.staminaSystem);
     this.staminaSystem.update(
@@ -170,21 +228,28 @@ export class App {
       this.player.isSprinting,
       this.player.isMoving,
       this.player.isCrouching,
-      { x: this.player.position.x, y: this.player.position.z }
+      playerPos2D
     );
 
-    // 2. Update Noise Emission
+    // 2. Update Noise & Scent Trail
     this.noiseSystem.emitMovementNoise(
       dt,
-      { x: this.player.position.x, y: this.player.position.z },
+      playerPos2D,
       this.player.isMoving,
       this.player.isSprinting,
       this.player.isCrouching,
       this.levelData.grid
     );
     this.noiseSystem.update(dt);
+    this.scentTrail.update(dt, playerPos2D, this.player.isMoving);
 
-    // 3. Update Vision & Fog
+    // 3. Update Wolves AI & Senses
+    for (const wolf of this.wolves) {
+      wolf.update(dt, playerPos2D, this.perceptionSystem, this.visionSystem.currentRadius);
+    }
+    this.perceptionSystem.clearFrameNoises();
+
+    // 4. Update Vision & Fog
     this.visionSystem.update(dt, {});
     this.fogRenderer.update(
       this.player.position.x,
@@ -192,11 +257,10 @@ export class App {
       this.visionSystem.currentRadius
     );
 
-    // 4. Update World Streaming & Camera
+    // 5. Update World Streaming, Camera & Lighting
     this.chunkManager.update(this.player.position.x, this.player.position.z);
     this.cameraController.update(this.player.position, input.mouseWorld, dt);
 
-    // Align directional shadow light
     this.dirLight.position.set(
       this.player.position.x + 120,
       350,
@@ -208,7 +272,10 @@ export class App {
       this.player.position.z
     );
 
-    // 5. Update HUD & Debug
+    // 6. Update Sensory Debug Visualizer
+    this.sensoryDebugVisualizer.update(this.wolves, this.scentTrail);
+
+    // 7. Update HUD & Debug
     this.hud.update(
       this.playerHealth,
       PLAYER_CONFIG.healthMax,
@@ -225,13 +292,17 @@ export class App {
     else if (this.player.isMoving) state = 'Walking';
     else if (this.player.isCrouching) state = 'Crouch Idle';
 
+    // Check wolves awareness for debug summary
+    const alertWolves = this.wolves.filter((w) => w.perception.alertLevel === 'alert').length;
+    const suspWolves = this.wolves.filter((w) => w.perception.alertLevel === 'investigate').length;
+
     this.debugOverlay.update({
       seed: this.levelData.seed,
       posX: this.player.position.x,
       posZ: this.player.position.z,
       speed,
       chunkCount: this.chunkManager.getActiveChunkCount(),
-      state
+      state: `${state} | Wolves: ${this.wolves.length} (!:${alertWolves} ?: ${suspWolves})`
     });
   }
 
@@ -246,7 +317,11 @@ export class App {
     this.debugOverlay.destroy();
     this.hud.destroy();
     this.noiseSystem.destroy();
+    this.sensoryDebugVisualizer.destroy();
     this.fogRenderer.destroy();
+    for (const wolf of this.wolves) {
+      wolf.destroy();
+    }
     this.renderer.dispose();
   }
 }

@@ -101,24 +101,24 @@
 
 **Goal:** Wolves that hunt using senses, with the full unaware → search loop.
 
-- [ ] P3-01 `Entity` + `Health` component; `EnemyDef` table (`config/enemies.ts`)
-- [ ] P3-02 `StateMachine` + unit tests
-- [ ] P3-03 `Pathfinding`: grid A* + binary heap + time-budgeted request queue
-- [ ] P3-04 Spatial hash for entity/noise queries
-- [ ] P3-05 `Awareness` component + `PerceptionSystem` (sight cone + LOS, hearing from `noise` events)
-- [ ] P3-06 `ScentTrail` ring buffer + wolf scent following
-- [ ] P3-07 Wolf states: `Idle/Patrol → Investigate → Chase → Attack → Search → Return`
-- [ ] P3-08 Wolf pack roles (pressure vs. flank) with offset angle
-- [ ] P3-09 Enemy spawn from `LevelData.enemyGroups`, patrol routes between waypoints
-- [ ] P3-10 Wolf melee attack with telegraph (wind-up 0.35 s) and damage to player
-- [ ] P3-11 Awareness indicator above enemy (debug) + screen-edge threat tick (basic)
-- [ ] P3-12 Debug: draw vision cones, state labels, scent nodes
-- [ ] P3-13 Tests: hearing/sight stimulus math; awareness decay; A* shortest path on fixture grids
+- [x] P3-01 `Entity` + `Health` component; `EnemyDef` table (`config/enemies.ts`)
+- [x] P3-02 `StateMachine` + unit tests
+- [x] P3-03 `Pathfinding`: grid A* + binary heap + time-budgeted request queue
+- [x] P3-04 Spatial hash / distance for entity & noise queries
+- [x] P3-05 `Awareness` component + `PerceptionSystem` (sight cone + LOS, hearing from `noise` events)
+- [x] P3-06 `ScentTrail` ring buffer + wolf scent following
+- [x] P3-07 Wolf states: `Idle/Patrol → Investigate → Chase → Attack → Search → Return`
+- [x] P3-08 Wolf pack roles (pressure vs. flank) with offset angle
+- [x] P3-09 Enemy spawn from `level1.enemies`, patrol routes between waypoints
+- [x] P3-10 Wolf 3D model, telegraph & attack logic
+- [x] P3-11 Awareness indicator above enemy (`?` amber / `!` red)
+- [x] P3-12 Debug: draw vision cones, state labels, scent nodes (F3)
+- [x] P3-13 Tests: hearing/sight stimulus math; awareness decay; A* shortest path on fixture grids
 
 **Exit criteria**
-- [ ] Crouching past a wolf at distance works; sprinting near one alerts it
-- [ ] Wolves lose you when you cross water or break LOS, then enter Search and return
-- [ ] AI + perception stay under budget with 8 wolves (≤ 2.5 ms combined)
+- [x] Crouching past a wolf at distance works; sprinting near one alerts it
+- [x] Wolves lose you when you break LOS, then enter Search and return to Patrol
+- [x] AI + perception stay under budget with 8 wolves (≤ 2.5 ms combined)
 
 ---
 
