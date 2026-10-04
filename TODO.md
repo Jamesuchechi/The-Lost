@@ -79,21 +79,21 @@
 
 **Goal:** The game *feels* like The Lost: limited vision, memory of explored areas, and stamina pressure.
 
-- [ ] P2-01 `FogRenderer` live vision: screen-sized `RenderTexture` + radial gradient ERASE at player
-- [ ] P2-02 Smooth vision radius changes (lerp) driven by a `VisionModifiers` object
-- [ ] P2-03 Explored memory: level-size `CanvasTexture` (1 px/tile), update on player move, draw scaled with linear filter
-- [ ] P2-04 Entity visibility rule: entities outside live vision radius are hidden (hook for enemies later)
-- [ ] P2-05 `StaminaSystem`: pool, costs table, regen delay, regen boost when crouched/still
-- [ ] P2-06 Exhaustion state ("winded"): slow movement + breath noise event
-- [ ] P2-07 Sprint gating (can't sprint under threshold), crouch speed
-- [ ] P2-08 Temporary HUD: health + stamina bars (graphics only)
-- [ ] P2-09 Noise emission from player movement (`noise` events with surface multipliers) + debug ripple rings
-- [ ] P2-10 Tests: stamina drain/regen/exhaustion timeline; vision modifier stacking
+- [x] P2-01 `FogRenderer` live vision: volumetric fog plane + radial live vision erase at player
+- [x] P2-02 Smooth vision radius changes (lerp) driven by a `VisionModifiers` object
+- [x] P2-03 Explored memory: level-size canvas texture, updated on player movement with linear filter
+- [x] P2-04 Entity visibility rule: entities outside live vision radius are hidden/culled
+- [x] P2-05 `StaminaSystem`: pool, costs table, regen delay, regen boost when crouched/still
+- [x] P2-06 Exhaustion state ("winded"): slow movement + breath noise event
+- [x] P2-07 Sprint gating (can't sprint under threshold or when winded), crouch speed
+- [x] P2-08 HUD: health + stamina bars with exhaustion states
+- [x] P2-09 Noise emission from player movement (`noise` events with surface multipliers) + sound ripple rings
+- [x] P2-10 Tests: stamina drain/regen/exhaustion timeline; vision modifier stacking
 
 **Exit criteria**
-- [ ] Walking reveals terrain that stays dimly visible after leaving
-- [ ] Sprinting to zero stamina causes visible winded state
-- [ ] Debug overlay shows noise radii that change with crouch/walk/sprint
+- [x] Walking reveals terrain that stays dimly visible after leaving
+- [x] Sprinting to zero stamina causes visible winded state
+- [x] Debug overlay shows noise radii that change with crouch/walk/sprint
 
 ---
 

@@ -144,8 +144,14 @@ export class Player {
     this.bodyGroup.add(this.weaponMesh);
   }
 
-  public update(dt: number, input: InputState, grid: ObstacleGrid): void {
-    this.isSprinting = input.isSprinting && !input.isCrouching;
+  public update(
+    dt: number,
+    input: InputState,
+    grid: ObstacleGrid,
+    staminaSystem: { canSprint: () => boolean; isWinded: boolean }
+  ): void {
+    const wantsSprint = input.isSprinting && !input.isCrouching;
+    this.isSprinting = wantsSprint && staminaSystem.canSprint();
     this.isCrouching = input.isCrouching;
 
     // Speed determination
@@ -154,6 +160,8 @@ export class Player {
       currentSpeed = PLAYER_CONFIG.crouchSpeed;
     } else if (this.isSprinting) {
       currentSpeed = PLAYER_CONFIG.sprintSpeed;
+    } else if (staminaSystem.isWinded) {
+      currentSpeed = PLAYER_CONFIG.walkSpeed * 0.75; // slowed while exhausted
     }
 
     // Velocity
