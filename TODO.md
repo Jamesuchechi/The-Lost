@@ -56,22 +56,22 @@
 
 **Goal:** Walk around a procedurally generated chunked world bigger than the screen.
 
-- [ ] P1-01 `InputController`: WASD, mouse position (world-space), Shift, Ctrl, Space, LMB/RMB, E, Tab, Esc
-- [ ] P1-02 `Player` entity: position, velocity, facing toward mouse, walk/crouch/sprint speeds from constants
-- [ ] P1-03 Camera follow with deadzone + mouse look-ahead
-- [ ] P1-04 `LevelConfig` type + `level1.ts` (minimal fields)
-- [ ] P1-05 `WorldGenerator` v1: simplex heightmap/moisture → forest biome tiles + water + obstacles (pure, no Phaser)
-- [ ] P1-06 `ObstacleGrid`: bitset + `isBlocked(x,y)` + DDA `hasLineOfSight`
-- [ ] P1-07 `ChunkManager`: load/unload chunks in a radius, bake ground to `RenderTexture`, pooled obstacle sprites
-- [ ] P1-08 Player vs. obstacle collision using the grid (slide along walls)
-- [ ] P1-09 Placeholder art: colored shapes for tiles, trees, rocks, player
-- [ ] P1-10 Debug overlay v0 (FPS, position, seed, chunk count) behind F3
-- [ ] P1-11 Test: `generateLevel` determinism for fixed seed; spawn is on walkable tile
+- [x] P1-01 `InputController`: WASD, mouse position (world-space), Shift, Ctrl, Space, LMB/RMB, E, Tab, Esc
+- [x] P1-02 `Player` entity: position, velocity, facing toward mouse, walk/crouch/sprint speeds from constants
+- [x] P1-03 Camera follow with deadzone + mouse look-ahead
+- [x] P1-04 `LevelConfig` type + `level1.ts` (minimal fields)
+- [x] P1-05 `WorldGenerator` v1: simplex heightmap/moisture → forest biome tiles + water + obstacles (pure, no rendering imports)
+- [x] P1-06 `ObstacleGrid`: bitset + `isBlocked(x,y)` + DDA `hasLineOfSight`
+- [x] P1-07 `ChunkManager`: load/unload chunks in a radius, instanced 3D terrain and obstacles
+- [x] P1-08 Player vs. obstacle collision using the grid (slide along walls)
+- [x] P1-09 Realistic 3D mesh representation for player, trees, rocks, altars, gate
+- [x] P1-10 Debug overlay v0 (FPS, position, seed, chunk count) behind F3
+- [x] P1-11 Test: `generateLevel` determinism for fixed seed; spawn is on walkable tile
 
 **Exit criteria**
-- [ ] 256×256 map streams with no hitching; ≥ 60 FPS
-- [ ] Same seed → identical map (test + visual check)
-- [ ] `?seed=` URL param works
+- [x] 256×256 map streams with no hitching; ≥ 60 FPS
+- [x] Same seed → identical map (test + visual check)
+- [x] `?seed=` URL param works
 
 ---
 
