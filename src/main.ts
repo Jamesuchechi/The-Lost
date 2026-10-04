@@ -158,30 +158,45 @@ export class App {
 
   private spawnWolves(seed: string): void {
     const aiRng = new Rng(seed, 'ai');
-    const wolfCount = level1.enemies.find((e) => e.type === 'wolf')?.count ?? 8;
+    let wolfIndex = 0;
 
-    for (let i = 0; i < wolfCount; i++) {
+    const trySpawnWolf = (centerX: number, centerZ: number, radiusMin: number, radiusMax: number): void => {
       let placed = false;
       let attempts = 0;
-      while (!placed && attempts < 150) {
+      while (!placed && attempts < 100) {
         attempts++;
-        const tx = aiRng.int(12, this.levelData.width - 13);
-        const ty = aiRng.int(12, this.levelData.height - 13);
-        const wx = (tx + 0.5) * TILE_SIZE;
-        const wz = (ty + 0.5) * TILE_SIZE;
+        const angle = aiRng.range(0, Math.PI * 2);
+        const dist = aiRng.range(radiusMin, radiusMax);
+        const wx = centerX + Math.cos(angle) * dist;
+        const wz = centerZ + Math.sin(angle) * dist;
+        const tx = Math.floor(wx / TILE_SIZE);
+        const ty = Math.floor(wz / TILE_SIZE);
 
-        // Ensure not right on top of player spawn
-        if (Math.hypot(wx - this.player.position.x, wz - this.player.position.z) < 350) {
-          continue;
-        }
-
-        if (!this.levelData.grid.isBlocked(tx, ty)) {
-          const wolf = new Wolf(`wolf_${i}`, wx, wz, this.pathfinding);
-          this.wolves.push(wolf);
-          this.scene.add(wolf.mesh);
-          placed = true;
+        if (tx > 2 && tx < this.levelData.width - 3 && ty > 2 && ty < this.levelData.height - 3) {
+          if (!this.levelData.grid.isBlocked(tx, ty)) {
+            const wolf = new Wolf(`wolf_${wolfIndex++}`, wx, wz, this.pathfinding);
+            this.wolves.push(wolf);
+            this.scene.add(wolf.mesh);
+            placed = true;
+          }
         }
       }
+    };
+
+    // 1. One scout wolf patrolling north of player spawn (400 - 550 units away)
+    trySpawnWolf(this.player.position.x, this.player.position.z - 450, 50, 150);
+
+    // 2. Guards for each Ancient Stone (2 wolves per stone)
+    for (const stone of this.levelData.stoneLocations) {
+      trySpawnWolf(stone.x, stone.y, 80, 200);
+      trySpawnWolf(stone.x, stone.y, 120, 250);
+    }
+
+    // 3. Wandering forest pack in the deep woods
+    for (let i = 0; i < 3; i++) {
+      const rx = aiRng.range(1000, this.levelData.width * TILE_SIZE - 1000);
+      const rz = aiRng.range(1000, this.levelData.height * TILE_SIZE - 1000);
+      trySpawnWolf(rx, rz, 50, 300);
     }
   }
 
