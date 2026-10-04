@@ -3,6 +3,8 @@ import { PLAYER_CONFIG } from '@/config/constants';
 import { PALETTE } from '@/config/palette';
 import { ObstacleGrid } from '@/world/ObstacleGrid';
 import type { InputState } from '@/core/InputController';
+import type { StaminaSystem } from '@/systems/StaminaSystem';
+import { WEAPON_DEFS, type WeaponDef } from '@/config/weapons';
 
 export class Player {
   public mesh: THREE.Group;
@@ -12,9 +14,21 @@ export class Player {
   public isMoving = false;
   public isSprinting = false;
   public isCrouching = false;
+  public isDodging = false;
+  public isInvulnerable = false;
   public radius = PLAYER_CONFIG.collisionRadius;
 
-  // Visual sub-meshes for animation & realism
+  // Combat & Inventory
+  public activeWeapon: WeaponDef = WEAPON_DEFS['spear']!;
+  public attackCooldown = 0;
+  public attackThrust = 0; // visual animation
+  public isAttacking = false;
+  public dodgeTimer = 0;
+  public dodgeDirection = new THREE.Vector3(0, 0, 0);
+
+  public bandagesCount = 2;
+
+  // Visual sub-meshes
   private bodyGroup: THREE.Group;
   private headMesh: THREE.Mesh;
   private scarfMesh: THREE.Mesh;
@@ -148,45 +162,82 @@ export class Player {
     dt: number,
     input: InputState,
     grid: ObstacleGrid,
-    staminaSystem: { canSprint: () => boolean; isWinded: boolean }
+    staminaSystem: StaminaSystem
   ): void {
-    const wantsSprint = input.isSprinting && !input.isCrouching;
-    this.isSprinting = wantsSprint && staminaSystem.canSprint();
-    this.isCrouching = input.isCrouching;
-
-    // Speed determination
-    let currentSpeed: number = PLAYER_CONFIG.walkSpeed;
-    if (this.isCrouching) {
-      currentSpeed = PLAYER_CONFIG.crouchSpeed;
-    } else if (this.isSprinting) {
-      currentSpeed = PLAYER_CONFIG.sprintSpeed;
-    } else if (staminaSystem.isWinded) {
-      currentSpeed = PLAYER_CONFIG.walkSpeed * 0.75; // slowed while exhausted
+    if (this.attackCooldown > 0) {
+      this.attackCooldown -= dt;
     }
 
-    // Velocity
-    const vx = input.moveX * currentSpeed;
-    const vz = input.moveY * currentSpeed;
-    this.velocity.set(vx, 0, vz);
+    // 1. Handle Dodge Roll (Space)
+    if (input.isDodging && !this.isDodging && staminaSystem.canDodge()) {
+      staminaSystem.drain(PLAYER_CONFIG.dodgeStaminaCost);
+      this.isDodging = true;
+      this.dodgeTimer = PLAYER_CONFIG.dodgeDurationSec;
 
-    const speedMag = Math.hypot(vx, vz);
-    this.isMoving = speedMag > 0.1;
-
-    // Move with wall-sliding collision against ObstacleGrid
-    const nextX = this.position.x + vx * dt;
-    const nextZ = this.position.z + vz * dt;
-
-    if (!grid.isBlockedWorld(nextX, this.position.z, this.radius)) {
-      this.position.x = nextX;
+      // Dodge in current input direction or facing direction
+      if (input.moveX !== 0 || input.moveY !== 0) {
+        this.dodgeDirection.set(input.moveX, 0, input.moveY).normalize();
+      } else {
+        this.dodgeDirection.set(Math.sin(this.facingAngle), 0, Math.cos(this.facingAngle));
+      }
     }
 
-    if (!grid.isBlockedWorld(this.position.x, nextZ, this.radius)) {
-      this.position.z = nextZ;
+    if (this.isDodging) {
+      this.dodgeTimer -= dt;
+      this.isInvulnerable = this.dodgeTimer >= PLAYER_CONFIG.dodgeDurationSec - PLAYER_CONFIG.dodgeIFrameSec;
+
+      const vx = this.dodgeDirection.x * PLAYER_CONFIG.dodgeSpeed;
+      const vz = this.dodgeDirection.z * PLAYER_CONFIG.dodgeSpeed;
+      this.velocity.set(vx, 0, vz);
+
+      const nextX = this.position.x + vx * dt;
+      const nextZ = this.position.z + vz * dt;
+      if (!grid.isBlockedWorld(nextX, this.position.z, this.radius)) this.position.x = nextX;
+      if (!grid.isBlockedWorld(this.position.x, nextZ, this.radius)) this.position.z = nextZ;
+
+      this.bodyGroup.rotation.x = (this.dodgeTimer / PLAYER_CONFIG.dodgeDurationSec) * Math.PI * 2;
+
+      if (this.dodgeTimer <= 0) {
+        this.isDodging = false;
+        this.isInvulnerable = false;
+        this.bodyGroup.rotation.x = 0;
+      }
+    } else {
+      // 2. Normal Movement
+      const wantsSprint = input.isSprinting && !input.isCrouching;
+      this.isSprinting = wantsSprint && staminaSystem.canSprint();
+      this.isCrouching = input.isCrouching;
+
+      let currentSpeed: number = PLAYER_CONFIG.walkSpeed;
+      if (this.isCrouching) {
+        currentSpeed = PLAYER_CONFIG.crouchSpeed;
+      } else if (this.isSprinting) {
+        currentSpeed = PLAYER_CONFIG.sprintSpeed;
+      } else if (staminaSystem.isWinded) {
+        currentSpeed = PLAYER_CONFIG.walkSpeed * 0.75;
+      }
+
+      const vx = input.moveX * currentSpeed;
+      const vz = input.moveY * currentSpeed;
+      this.velocity.set(vx, 0, vz);
+
+      const speedMag = Math.hypot(vx, vz);
+      this.isMoving = speedMag > 0.1;
+
+      const nextX = this.position.x + vx * dt;
+      const nextZ = this.position.z + vz * dt;
+
+      if (!grid.isBlockedWorld(nextX, this.position.z, this.radius)) {
+        this.position.x = nextX;
+      }
+      if (!grid.isBlockedWorld(this.position.x, nextZ, this.radius)) {
+        this.position.z = nextZ;
+      }
     }
 
     this.mesh.position.copy(this.position);
 
-    // Aim / Face towards mouse cursor in world coordinates
+    // Aim / Face towards mouse
     const dx = input.mouseWorld.x - this.position.x;
     const dz = input.mouseWorld.z - this.position.z;
     if (Math.hypot(dx, dz) > 5) {
@@ -194,15 +245,29 @@ export class Player {
       this.bodyGroup.rotation.y = this.facingAngle;
     }
 
+    // 3. Attack Thrust Animation
+    if (this.attackThrust > 0) {
+      this.attackThrust -= dt * 6;
+      this.weaponMesh.position.z = 5 + Math.sin(this.attackThrust * Math.PI) * 16;
+      this.weaponMesh.position.y = 18 + Math.sin(this.attackThrust * Math.PI) * 4;
+    } else {
+      this.weaponMesh.position.set(9, 18, 5);
+    }
+
     // Walking animation bob
-    if (this.isMoving) {
+    if (this.isMoving && !this.isDodging) {
       this.walkBob += dt * (this.isSprinting ? 16 : 10);
       this.bodyGroup.position.y = Math.abs(Math.sin(this.walkBob)) * 2.5;
-      this.weaponMesh.rotation.z = Math.sin(this.walkBob) * 0.15;
     } else {
       this.walkBob = 0;
       this.bodyGroup.position.y = 0;
-      this.weaponMesh.rotation.z = 0;
     }
+  }
+
+  public triggerAttackAnimation(isHeavy: boolean): void {
+    this.attackThrust = 1.0;
+    this.attackCooldown = isHeavy
+      ? this.activeWeapon.heavyCooldownSec
+      : this.activeWeapon.lightCooldownSec;
   }
 }

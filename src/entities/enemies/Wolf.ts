@@ -8,7 +8,7 @@ import type { Pathfinding } from '@/world/Pathfinding';
 import type { Vec2 } from '@/core/math';
 import { distance } from '@/core/math';
 
-export type WolfState = 'Patrol' | 'Investigate' | 'Chase' | 'Search';
+export type WolfState = 'Patrol' | 'Investigate' | 'Chase' | 'Attack' | 'Search' | 'Flee';
 
 export class Wolf extends Entity {
   public def = ENEMY_DEFS.wolf;
@@ -18,19 +18,25 @@ export class Wolf extends Entity {
   private waypoints: Vec2[] = [];
   private currentWaypointIdx = 0;
 
+  // Combat Timers
+  public attackCooldown = 0;
+  public attackWindup = 0; // 0.35s wind-up telegraph
+  public isAttacking = false;
+
   // 3D Visual Sub-meshes
   private bodyMesh: THREE.Mesh;
   private legGroup: THREE.Group;
   private headGroup: THREE.Group;
   private tailMesh: THREE.Mesh;
-  private markerSprite: THREE.Sprite;
-  private markerCanvas: HTMLCanvasElement;
-  private markerCtx: CanvasRenderingContext2D;
-  private markerTexture: THREE.CanvasTexture;
+  private markerSprite?: THREE.Sprite;
+  private markerCanvas?: HTMLCanvasElement;
+  private markerCtx?: CanvasRenderingContext2D;
+  private markerTexture?: THREE.CanvasTexture;
 
   private runBob = 0;
   private searchTimer = 0;
   private patrolHome: Vec2;
+  private hitFlashTimer = 0;
 
   constructor(id: string, startX: number, startZ: number, pathfinder: Pathfinding) {
     super(id, 'enemy', startX, startZ, ENEMY_DEFS.wolf.health, ENEMY_DEFS.wolf.collisionRadius);
@@ -136,27 +142,41 @@ export class Wolf extends Entity {
     this.mesh.add(this.tailMesh);
 
     // 2. Floating Awareness Marker Canvas Sprite
-    this.markerCanvas = document.createElement('canvas');
-    this.markerCanvas.width = 128;
-    this.markerCanvas.height = 128;
-    const ctx = this.markerCanvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas 2D unsupported');
-    this.markerCtx = ctx;
-
-    this.markerTexture = new THREE.CanvasTexture(this.markerCanvas);
-    const spriteMat = new THREE.SpriteMaterial({
-      map: this.markerTexture,
-      transparent: true,
-      depthTest: false
-    });
-    this.markerSprite = new THREE.Sprite(spriteMat);
-    this.markerSprite.position.set(0, 38, 0);
-    this.markerSprite.scale.set(16, 16, 1);
-    this.mesh.add(this.markerSprite);
+    if (typeof document !== 'undefined') {
+      this.markerCanvas = document.createElement('canvas');
+      this.markerCanvas.width = 128;
+      this.markerCanvas.height = 128;
+      const ctx = this.markerCanvas.getContext('2d');
+      if (ctx) {
+        this.markerCtx = ctx;
+        this.markerTexture = new THREE.CanvasTexture(this.markerCanvas);
+        const spriteMat = new THREE.SpriteMaterial({
+          map: this.markerTexture,
+          transparent: true,
+          depthTest: false
+        });
+        this.markerSprite = new THREE.Sprite(spriteMat);
+        this.markerSprite.position.set(0, 38, 0);
+        this.markerSprite.scale.set(16, 16, 1);
+        this.mesh.add(this.markerSprite);
+      }
+    }
 
     // 3. Setup State Machine
     this.stateMachine = new StateMachine<WolfState>('Patrol');
     this.setupStateMachine();
+  }
+
+  public override takeDamage(amount: number): boolean {
+    const alive = super.takeDamage(amount);
+    this.hitFlashTimer = 0.15;
+    (this.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(0xffffff);
+
+    // Check flee threshold (< 25% HP)
+    if (this.health.current > 0 && this.health.current < this.health.max * 0.25) {
+      this.stateMachine.transitionTo('Flee');
+    }
+    return alive;
   }
 
   private setupStateMachine(): void {
@@ -220,6 +240,30 @@ export class Wolf extends Entity {
         }
       })
       .registerState({
+        name: 'Attack',
+        onEnter: () => {
+          this.attackWindup = 0.35; // 0.35s telegraph wind-up
+          this.isAttacking = true;
+        },
+        update: (dt) => {
+          this.attackWindup -= dt;
+          // Crouch down in pounce anticipation
+          this.bodyMesh.position.y = 10;
+          this.headGroup.position.z = 18;
+
+          if (this.attackWindup <= 0) {
+            this.isAttacking = false;
+            this.attackCooldown = this.def.attackCooldownSec;
+            this.stateMachine.transitionTo('Chase');
+          }
+        },
+        onExit: () => {
+          this.isAttacking = false;
+          this.bodyMesh.position.y = 15;
+          this.headGroup.position.z = 14;
+        }
+      })
+      .registerState({
         name: 'Search',
         onEnter: () => {
           this.searchTimer = 4.0;
@@ -234,6 +278,24 @@ export class Wolf extends Entity {
           } else if (this.searchTimer <= 0 || this.perception.alertLevel === 'unaware') {
             this.stateMachine.transitionTo('Patrol');
           }
+        }
+      })
+      .registerState({
+        name: 'Flee',
+        onEnter: () => {
+          const angle = Math.random() * Math.PI * 2;
+          const targetX = this.position.x + Math.cos(angle) * 350;
+          const targetZ = this.position.z + Math.sin(angle) * 350;
+          this.waypoints = this.pathfinder.findPath(
+            this.position.x,
+            this.position.z,
+            targetX,
+            targetZ
+          );
+          this.currentWaypointIdx = 0;
+        },
+        update: (dt) => {
+          this.moveAlongWaypoints(this.def.runSpeed * 1.1, dt);
         }
       });
   }
@@ -287,8 +349,25 @@ export class Wolf extends Entity {
     dt: number,
     playerPos: Vec2,
     perceptionSystem: PerceptionSystem,
-    playerVisionRadius: number
+    playerVisionRadius: number,
+    onPlayerAttack?: (damage: number) => void
   ): void {
+    if (this.health.isDead) {
+      this.mesh.visible = false;
+      return;
+    }
+
+    if (this.hitFlashTimer > 0) {
+      this.hitFlashTimer -= dt;
+      if (this.hitFlashTimer <= 0) {
+        (this.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(PALETTE.wolfFur);
+      }
+    }
+
+    if (this.attackCooldown > 0) {
+      this.attackCooldown -= dt;
+    }
+
     // 1. Evaluate Senses (Sight, Hearing, Scent)
     perceptionSystem.evaluateEnemy(
       dt,
@@ -299,18 +378,33 @@ export class Wolf extends Entity {
       this.perception
     );
 
-    // 2. Update AI State Machine
+    // 2. Check if ready to pounce / bite player
+    const distToPlayer = distance({ x: this.position.x, y: this.position.z }, playerPos);
+    if (
+      this.perception.hasVisualContact &&
+      distToPlayer <= this.def.attackRange &&
+      this.attackCooldown <= 0 &&
+      this.stateMachine.getCurrentState() === 'Chase'
+    ) {
+      this.stateMachine.transitionTo('Attack');
+      if (onPlayerAttack) {
+        onPlayerAttack(this.def.attackDamage);
+      }
+    }
+
+    // 3. Update AI State Machine
     this.stateMachine.update(dt);
 
-    // 3. Update Floating Awareness Marker
+    // 4. Update Floating Awareness Marker
     this.updateMarker();
 
-    // 4. Live Vision Culling: Hide if outside player live vision radius
-    const distToPlayer = distance({ x: this.position.x, y: this.position.z }, playerPos);
+    // 5. Live Vision Culling
     this.mesh.visible = distToPlayer <= playerVisionRadius;
   }
 
   private updateMarker(): void {
+    if (!this.markerCtx || !this.markerTexture || !this.markerSprite) return;
+
     this.markerCtx.clearRect(0, 0, 128, 128);
 
     if (this.perception.awareness >= 0.25) {
@@ -336,7 +430,9 @@ export class Wolf extends Entity {
   }
 
   public destroy(): void {
-    this.markerTexture.dispose();
+    if (this.markerTexture) {
+      this.markerTexture.dispose();
+    }
     this.mesh.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
         obj.geometry.dispose();

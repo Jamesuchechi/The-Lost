@@ -126,27 +126,27 @@
 
 **Goal:** A complete, winnable, losable Level 1. **Milestone M1.**
 
-- [ ] P4-01 `CombatSystem`: melee arc hit detection, `DamageEvent`, knockback, stagger
-- [ ] P4-02 Player light + heavy attack with stamina costs and noise emission
-- [ ] P4-03 Dodge roll with i-frames
-- [ ] P4-04 Backstab rule (unaware + rear arc → ×3, quiet)
-- [ ] P4-05 Wolf health, hit reactions, death, flee at 25% HP
-- [ ] P4-06 Weapon pickups: sharpened stick (+ durability), `Pickup` entity + interact (E)
-- [ ] P4-07 Consumables: bandage (1.5 s, interruptible)
-- [ ] P4-08 `placement.ts`: stones (distance constraints), solvability flood-fill, spawn, exit gate
-- [ ] P4-09 Stone entity + collection + `stoneCollected` event; stone counter (temp HUD)
-- [ ] P4-10 Clues v1: totems pointing toward next stone (text + arrow glyph)
-- [ ] P4-11 Exit gate: locked until 3 stones; unlocks → "escape" state with gate charge timer + extra wolf wave
-- [ ] P4-12 Win screen and Death screen (cause of death, time, stones found)
-- [ ] P4-13 Restart flow (new seed / same seed)
-- [ ] P4-14 Property test: 500 seeds → all stones/exit reachable; distances respected
-- [ ] P4-15 Playtest #1 and write notes
+- [x] P4-01 `CombatSystem`: melee arc hit detection, `DamageEvent`, knockback, stagger
+- [x] P4-02 Player light + heavy attack with stamina costs and noise emission
+- [x] P4-03 Dodge roll with i-frames
+- [x] P4-04 Backstab rule (unaware + rear arc → ×3, quiet)
+- [x] P4-05 Wolf health, hit reactions, death, flee at 25% HP
+- [x] P4-06 Weapon pickups: sharpened stick (+ durability), `Pickup` entity + interact (E)
+- [x] P4-07 Consumables: bandage (1.5 s, interruptible)
+- [x] P4-08 `placement.ts`: stones (distance constraints), solvability flood-fill, spawn, exit gate
+- [x] P4-09 Stone entity + collection + `stoneCollected` event; stone counter (temp HUD)
+- [x] P4-10 Clues v1: totems pointing toward next stone (text + arrow glyph)
+- [x] P4-11 Exit gate: locked until 3 stones; unlocks → "escape" state with gate charge timer + extra wolf wave
+- [x] P4-12 Win screen and Death screen (cause of death, time, stones found)
+- [x] P4-13 Restart flow (new seed / same seed)
+- [x] P4-14 Property test: 500 seeds → all stones/exit reachable; distances respected
+- [x] P4-15 Playtest #1 and write notes
 
 **Exit criteria (M1)**
-- [ ] Full Level 1 playable start to finish in 8-12 min
-- [ ] Player can win by stealth, by fighting, or a mix
-- [ ] No softlocks (unreachable stone/exit) across 500 seeds
-- [ ] Deployed to a preview URL
+- [x] Full Level 1 playable start to finish in 8-12 min
+- [x] Player can win by stealth, by fighting, or a mix
+- [x] No softlocks (unreachable stone/exit) across 500 seeds
+- [x] Deployed to a preview URL
 
 ---
 

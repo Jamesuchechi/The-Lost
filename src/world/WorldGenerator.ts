@@ -204,6 +204,14 @@ export function generateLevel(config: LevelConfig, seed: string | number): Level
     y: (exitTileY + 0.5) * TILE_SIZE
   };
 
+  // 6. Guarantee Solvability: Carve walkable natural corridors from spawn to all stones and exit gate
+  for (const stone of stoneLocations) {
+    const stx = Math.floor(stone.x / TILE_SIZE);
+    const sty = Math.floor(stone.y / TILE_SIZE);
+    carveCorridor(grid, spawnTileX, spawnTileY, stx, sty, 2);
+  }
+  carveCorridor(grid, spawnTileX, spawnTileY, exitTileX, exitTileY, 2);
+
   return {
     config,
     seed,
@@ -215,4 +223,48 @@ export function generateLevel(config: LevelConfig, seed: string | number): Level
     clueLocations,
     exitLocation
   };
+}
+
+function carveCorridor(
+  grid: ObstacleGrid,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  corridorWidth: number = 2
+): void {
+  let cx = startX;
+  let cy = startY;
+
+  while (cx !== endX || cy !== endY) {
+    for (let dy = -Math.floor(corridorWidth / 2); dy <= Math.floor(corridorWidth / 2); dy++) {
+      for (let dx = -Math.floor(corridorWidth / 2); dx <= Math.floor(corridorWidth / 2); dx++) {
+        const tx = cx + dx;
+        const ty = cy + dy;
+        if (tx > 1 && tx < grid.width - 2 && ty > 1 && ty < grid.height - 2) {
+          if (grid.isBlocked(tx, ty)) {
+            grid.setTile(tx, ty, ObstacleGrid.TYPE_DIRT, false);
+          }
+        }
+      }
+    }
+
+    if (cx < endX) cx++;
+    else if (cx > endX) cx--;
+
+    if (cy < endY) cy++;
+    else if (cy > endY) cy--;
+  }
+
+  for (let dy = -Math.floor(corridorWidth / 2); dy <= Math.floor(corridorWidth / 2); dy++) {
+    for (let dx = -Math.floor(corridorWidth / 2); dx <= Math.floor(corridorWidth / 2); dx++) {
+      const tx = endX + dx;
+      const ty = endY + dy;
+      if (tx > 1 && tx < grid.width - 2 && ty > 1 && ty < grid.height - 2) {
+        if (grid.isBlocked(tx, ty)) {
+          grid.setTile(tx, ty, ObstacleGrid.TYPE_DIRT, false);
+        }
+      }
+    }
+  }
 }
